@@ -1,0 +1,8 @@
+.nvim/
+.waras/
+.gradle/
+build/
+.idea/
+.claude/
+*.iml
+out/

@@ -1,0 +1,11 @@
+blocks:
+  - material: minecraft:iron_block
+    max-gap: 15
+  - material: minecraft:diamond_block
+    max-gap: 30
+  - material: minecraft:netherite_block
+    max-gap: 90
+sound:
+  enabled: true
+  ascend: minecraft:block.beacon.activate
+  descend: minecraft:block.beacon.deactivate

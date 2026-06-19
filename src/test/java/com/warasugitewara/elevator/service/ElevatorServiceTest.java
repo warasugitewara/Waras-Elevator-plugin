@@ -152,12 +152,14 @@ class ElevatorServiceTest {
 
 	@Test
 	void skipsContiguousRunOfSameMaterialBeforeSearching() {
-		// y=60-62 鉄ブロック3段連続。y=70 に次の鉄ブロック1段。間は空気で通行可能。
-		// currentYは連続区間の最下段(60)とする。連続区間全体をスキップしてから
-		// 探索を始め、70が見つかることを検証する。
+		// y=60-62 鉄ブロック3段連続。y=61, y=62 の直上(62,63 および 63,64)は通行可能にする。
+		// スキップ処理がなければ cursor=61 で IRON_BLOCK かつ isSafeLanding(61)=passable(62)&&passable(63)=true
+		// となり 61 が誤って返ってしまう。スキップ処理が正しく機能すれば、連続区間(60-62)全体を
+		// 飛び越えてから探索するため、61は候補にならず、70 が返るべき。
 		FakeColumn column = new FakeColumn()
 			.fill(60, 62, Material.IRON_BLOCK)
 			.fill(70, 70, Material.IRON_BLOCK)
+			.setPassable(62, 64)
 			.setPassable(71, 72);
 
 		OptionalInt result = ElevatorService.findNextFloor(BLOCK_CONFIG, column, 60, 0, 255, Direction.UP);

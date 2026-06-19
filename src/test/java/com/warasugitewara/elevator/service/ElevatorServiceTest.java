@@ -149,4 +149,20 @@ class ElevatorServiceTest {
 
 		assertTrue(result.isEmpty());
 	}
+
+	@Test
+	void skipsContiguousRunOfSameMaterialBeforeSearching() {
+		// y=60-62 鉄ブロック3段連続。y=70 に次の鉄ブロック1段。間は空気で通行可能。
+		// currentYは連続区間の最下段(60)とする。連続区間全体をスキップしてから
+		// 探索を始め、70が見つかることを検証する。
+		FakeColumn column = new FakeColumn()
+			.fill(60, 62, Material.IRON_BLOCK)
+			.fill(70, 70, Material.IRON_BLOCK)
+			.setPassable(71, 72);
+
+		OptionalInt result = ElevatorService.findNextFloor(BLOCK_CONFIG, column, 60, 0, 255, Direction.UP);
+
+		assertTrue(result.isPresent());
+		assertEquals(70, result.getAsInt());
+	}
 }

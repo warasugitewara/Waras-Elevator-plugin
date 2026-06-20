@@ -22,9 +22,7 @@ import java.util.UUID;
 
 public class ElevatorListener implements Listener {
 
-    // 下降はジャンプの滞空時間のような演出を挟まないぶん、上昇と同じ間隔だと
-    // テレポートの「間」が目立ちやすいため、下降だけクールダウンを短くする。
-    private static final long UP_COOLDOWN_MS = 300L;
+    private static final long UP_COOLDOWN_MS = 150L;
     private static final long DOWN_COOLDOWN_MS = 150L;
 
     private final ConfigManager configManager;

@@ -81,7 +81,14 @@ public class ElevatorListener implements Listener {
                 continue;
             }
 
-            triggerMove(player, direction, belowAnchor);
+            boolean moved = triggerMove(player, direction, belowAnchor);
+            if (!moved) {
+                // 移動先の階が見つからなかった場合(最上階/最下階など)は通常のジャンプ/
+                // しゃがみとして扱うため、速度をリセットしてはいけない。リセットすると
+                // 毎ティック上昇速度が潰されてジャンプ自体ができなくなってしまう。
+                continue;
+            }
+
             // テレポート後に残ったジャンプの上昇速度で再度跳ね上がってしまうのを防ぐため、
             // 着地直後のY座標差分判定が誤って続けて発火しないよう速度と基準Yをリセットする。
             player.setVelocity(new Vector(0, 0, 0));
@@ -104,7 +111,7 @@ public class ElevatorListener implements Listener {
         return configManager.getBlocks().containsKey(material) ? material : null;
     }
 
-    private void triggerMove(Player player, Direction direction, Location floorAnchor) {
+    private boolean triggerMove(Player player, Direction direction, Location floorAnchor) {
         World world = player.getWorld();
         Location loc = player.getLocation();
         // 上昇中は現在のY座標ではなく、下のブロック判定と同じ接地時のY座標を基準にしないと、
@@ -121,7 +128,7 @@ public class ElevatorListener implements Listener {
                 direction
         );
         if (result.isEmpty()) {
-            return;
+            return false;
         }
 
         int floorY = result.getAsInt();
@@ -130,6 +137,7 @@ public class ElevatorListener implements Listener {
         setCooldown(player);
         player.teleport(destination);
         playSound(player, direction);
+        return true;
     }
 
     private boolean isOnCooldown(Player player, Direction direction) {

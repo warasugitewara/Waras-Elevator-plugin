@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +26,9 @@ public class ElevatorListener implements Listener {
 
     private final ConfigManager configManager;
     private final Map<UUID, Long> cooldowns = new HashMap<>();
+    // Player#getVelocity()はノックバック等の明示的な速度には追従するが、ジャンプ自体の
+    // 上昇では信頼できる値を返さないことがあるため、毎ティックのY座標差分で上昇を判定する。
+    private final Map<UUID, Double> lastY = new HashMap<>();
 
     public ElevatorListener(ConfigManager configManager) {
         this.configManager = configManager;
@@ -32,15 +36,19 @@ public class ElevatorListener implements Listener {
 
     // PlayerMoveEventは実際に座標/向きが変化した時しか発火せず、立ち止まったままシフトを
     // 押し続けているだけでは判定が走らない。移動イベントに依存せず、毎ティック全プレイヤーの
-    // 速度/しゃがみ状態を見ることで、その場待機中でも継続した上昇/下降ができるようにする。
+    // Y座標差分/しゃがみ状態を見ることで、その場待機中でも継続した上昇/下降ができるようにする。
     public void tick() {
         for (Player player : Bukkit.getOnlinePlayers()) {
+            UUID id = player.getUniqueId();
+            double currentY = player.getLocation().getY();
+            Double previousY = lastY.put(id, currentY);
+
             if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
                 continue;
             }
 
             Direction direction;
-            if (player.getVelocity().getY() > 0) {
+            if (previousY != null && currentY > previousY) {
                 direction = Direction.UP;
             } else if (player.isSneaking()) {
                 direction = Direction.DOWN;
@@ -54,12 +62,18 @@ public class ElevatorListener implements Listener {
             }
 
             triggerMove(player, direction);
+            // テレポート後に残ったジャンプの上昇速度で再度跳ね上がってしまうのを防ぐため、
+            // 着地直後のY座標差分判定が誤って続けて発火しないよう速度と基準Yをリセットする。
+            player.setVelocity(new Vector(0, 0, 0));
+            lastY.put(id, player.getLocation().getY());
         }
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        cooldowns.remove(event.getPlayer().getUniqueId());
+        UUID id = event.getPlayer().getUniqueId();
+        cooldowns.remove(id);
+        lastY.remove(id);
     }
 
     private Material elevatorBlockBelow(Player player, Location location) {

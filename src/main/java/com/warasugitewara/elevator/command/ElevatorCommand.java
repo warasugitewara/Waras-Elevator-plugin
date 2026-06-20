@@ -111,7 +111,7 @@ public class ElevatorCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleInfo(CommandSender sender) {
-        sender.sendMessage("§e=== IronElevators 設定 ===");
+        sender.sendMessage("§e=== Wara's Elevators 設定 ===");
         sender.sendMessage("§7サウンド: " + (configManager.isSoundEnabled() ? "有効" : "無効"));
         sender.sendMessage("§7上昇音: " + configManager.getAscendSound());
         sender.sendMessage("§7下降音: " + configManager.getDescendSound());

@@ -24,6 +24,6 @@ public class ElevatorPlugin extends JavaPlugin {
 			pluginCommand.setTabCompleter(command);
 		}
 
-		getLogger().info("IronElevators enabled.");
+		getLogger().info("Wara's Elevators enabled.");
 	}
 }

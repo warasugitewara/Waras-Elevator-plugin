@@ -1,12 +1,12 @@
-name: IronElevators
+name: WarasElevators
 version: '${version}'
 main: com.warasugitewara.elevator.ElevatorPlugin
 api-version: '1.21'
 author: warasugitewara
-description: Walk onto stacked blocks and jump/sneak to ride elevators.
+description: "Wara's Elevators: Walk onto stacked blocks and jump/sneak to ride elevators."
 commands:
   elevator:
-    description: Manage IronElevators settings.
+    description: Manage Wara's Elevators settings.
     usage: /elevator <block|sound|info|reload>
     aliases: [el]
 permissions:

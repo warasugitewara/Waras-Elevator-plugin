@@ -4,5 +4,6 @@
 build/
 .idea/
 .claude/
+.superpowers/
 *.iml
 out/

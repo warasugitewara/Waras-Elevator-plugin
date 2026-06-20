@@ -143,6 +143,13 @@ public class ElevatorCommand implements CommandExecutor, TabCompleter {
         if (args.length == 2 && args[0].equalsIgnoreCase("sound")) {
             return filter(List.of("on", "off"), args[1]);
         }
+        if (args.length == 3 && args[0].equalsIgnoreCase("block") && args[1].equalsIgnoreCase("remove")) {
+            List<String> names = new ArrayList<>();
+            for (Material material : configManager.getBlocks().keySet()) {
+                names.add(material.getKey().getKey());
+            }
+            return filter(names, args[2]);
+        }
         return Collections.emptyList();
     }
 

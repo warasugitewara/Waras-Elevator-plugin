@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 import java.util.HashMap;
@@ -25,6 +26,7 @@ public class ElevatorListener implements Listener {
 
     private final ConfigManager configManager;
     private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private final Map<UUID, Boolean> wasOnGround = new HashMap<>();
 
     public ElevatorListener(ConfigManager configManager) {
         this.configManager = configManager;
@@ -34,11 +36,21 @@ public class ElevatorListener implements Listener {
     public void onMove(PlayerMoveEvent event) {
         Location to = event.getTo();
         Location from = event.getFrom();
-        if (to == null || to.getY() <= from.getY()) {
+        if (to == null) {
             return;
         }
 
         Player player = event.getPlayer();
+        UUID id = player.getUniqueId();
+        // ジャンプ(離地)のみを判定するため、今回の接地状態で更新する前に直前tickの接地状態を読む。
+        // ジャンプ長押しでも、踏み直すたびに「接地→離地」が繰り返されるため連続昇降に対応する。
+        boolean wasGrounded = wasOnGround.getOrDefault(id, false);
+        wasOnGround.put(id, player.isOnGround());
+
+        if (!wasGrounded || player.getVelocity().getY() <= 0) {
+            return;
+        }
+
         Material below = elevatorBlockBelow(player, from);
         if (below == null) {
             return;
@@ -48,6 +60,13 @@ public class ElevatorListener implements Listener {
         }
 
         triggerMove(player, Direction.UP);
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        cooldowns.remove(id);
+        wasOnGround.remove(id);
     }
 
     @EventHandler

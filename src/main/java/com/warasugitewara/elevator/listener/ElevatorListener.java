@@ -5,13 +5,13 @@ import com.warasugitewara.elevator.service.BukkitColumnAccessor;
 import com.warasugitewara.elevator.service.ColumnAccessor;
 import com.warasugitewara.elevator.service.Direction;
 import com.warasugitewara.elevator.service.ElevatorService;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.HashMap;
@@ -30,35 +30,31 @@ public class ElevatorListener implements Listener {
         this.configManager = configManager;
     }
 
-    @EventHandler
-    public void onMove(PlayerMoveEvent event) {
-        Location to = event.getTo();
-        if (to == null) {
-            return;
-        }
+    // PlayerMoveEventは実際に座標/向きが変化した時しか発火せず、立ち止まったままシフトを
+    // 押し続けているだけでは判定が走らない。移動イベントに依存せず、毎ティック全プレイヤーの
+    // 速度/しゃがみ状態を見ることで、その場待機中でも継続した上昇/下降ができるようにする。
+    public void tick() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
+                continue;
+            }
 
-        Player player = event.getPlayer();
-        if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
-            return;
-        }
+            Direction direction;
+            if (player.getVelocity().getY() > 0) {
+                direction = Direction.UP;
+            } else if (player.isSneaking()) {
+                direction = Direction.DOWN;
+            } else {
+                continue;
+            }
 
-        // 位置差分ではなく現在の速度/しゃがみ状態で判定することで、ジャンプ長押しやシフト保持中も
-        // クールダウンが切れるたびに再発火し、連続した上昇/下降ができるようにする。
-        Direction direction;
-        if (player.getVelocity().getY() > 0) {
-            direction = Direction.UP;
-        } else if (player.isSneaking()) {
-            direction = Direction.DOWN;
-        } else {
-            return;
-        }
+            Material below = elevatorBlockBelow(player, player.getLocation());
+            if (below == null) {
+                continue;
+            }
 
-        Material below = elevatorBlockBelow(player, to);
-        if (below == null) {
-            return;
+            triggerMove(player, direction);
         }
-
-        triggerMove(player, direction);
     }
 
     @EventHandler

@@ -13,7 +13,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,44 +33,37 @@ public class ElevatorListener implements Listener {
     @EventHandler
     public void onMove(PlayerMoveEvent event) {
         Location to = event.getTo();
-        Location from = event.getFrom();
-        if (to == null || to.getY() <= from.getY()) {
+        if (to == null) {
             return;
         }
 
         Player player = event.getPlayer();
-        Material below = elevatorBlockBelow(player, from);
-        if (below == null) {
-            return;
-        }
         if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
             return;
         }
 
-        triggerMove(player, Direction.UP);
+        // 位置差分ではなく現在の速度/しゃがみ状態で判定することで、ジャンプ長押しやシフト保持中も
+        // クールダウンが切れるたびに再発火し、連続した上昇/下降ができるようにする。
+        Direction direction;
+        if (player.getVelocity().getY() > 0) {
+            direction = Direction.UP;
+        } else if (player.isSneaking()) {
+            direction = Direction.DOWN;
+        } else {
+            return;
+        }
+
+        Material below = elevatorBlockBelow(player, to);
+        if (below == null) {
+            return;
+        }
+
+        triggerMove(player, direction);
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         cooldowns.remove(event.getPlayer().getUniqueId());
-    }
-
-    @EventHandler
-    public void onToggleSneak(PlayerToggleSneakEvent event) {
-        if (!event.isSneaking()) {
-            return;
-        }
-
-        Player player = event.getPlayer();
-        Material below = elevatorBlockBelow(player, player.getLocation());
-        if (below == null) {
-            return;
-        }
-        if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
-            return;
-        }
-
-        triggerMove(player, Direction.DOWN);
     }
 
     private Material elevatorBlockBelow(Player player, Location location) {

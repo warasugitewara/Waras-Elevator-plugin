@@ -29,6 +29,9 @@ public class ElevatorListener implements Listener {
     // Player#getVelocity()はノックバック等の明示的な速度には追従するが、ジャンプ自体の
     // 上昇では信頼できる値を返さないことがあるため、毎ティックのY座標差分で上昇を判定する。
     private final Map<UUID, Double> lastY = new HashMap<>();
+    // 上昇中は現在位置の1つ下を見ると、ジャンプの頂点付近でエレベーターブロックから外れた
+    // (空気の)位置を見てしまい判定を取りこぼす。直前に接地していたY座標を基準にする。
+    private final Map<UUID, Double> lastGroundY = new HashMap<>();
 
     public ElevatorListener(ConfigManager configManager) {
         this.configManager = configManager;
@@ -43,20 +46,32 @@ public class ElevatorListener implements Listener {
             double currentY = player.getLocation().getY();
             Double previousY = lastY.put(id, currentY);
 
+            if (player.isOnGround()) {
+                lastGroundY.put(id, currentY);
+            }
+
             if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
                 continue;
             }
 
             Direction direction;
+            Location belowAnchor;
             if (previousY != null && currentY > previousY) {
+                Double groundY = lastGroundY.get(id);
+                if (groundY == null) {
+                    continue;
+                }
                 direction = Direction.UP;
+                belowAnchor = player.getLocation().clone();
+                belowAnchor.setY(groundY);
             } else if (player.isSneaking()) {
                 direction = Direction.DOWN;
+                belowAnchor = player.getLocation();
             } else {
                 continue;
             }
 
-            Material below = elevatorBlockBelow(player, player.getLocation());
+            Material below = elevatorBlockBelow(player, belowAnchor);
             if (below == null) {
                 continue;
             }
@@ -65,7 +80,9 @@ public class ElevatorListener implements Listener {
             // テレポート後に残ったジャンプの上昇速度で再度跳ね上がってしまうのを防ぐため、
             // 着地直後のY座標差分判定が誤って続けて発火しないよう速度と基準Yをリセットする。
             player.setVelocity(new Vector(0, 0, 0));
-            lastY.put(id, player.getLocation().getY());
+            double landedY = player.getLocation().getY();
+            lastY.put(id, landedY);
+            lastGroundY.put(id, landedY);
         }
     }
 
@@ -74,6 +91,7 @@ public class ElevatorListener implements Listener {
         UUID id = event.getPlayer().getUniqueId();
         cooldowns.remove(id);
         lastY.remove(id);
+        lastGroundY.remove(id);
     }
 
     private Material elevatorBlockBelow(Player player, Location location) {

@@ -8,7 +8,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class ElevatorPlugin extends JavaPlugin {
 
-	private static final long TICK_INTERVAL_TICKS = 2L;
+	private static final long TICK_INTERVAL_TICKS = 1L;
 
 	private ConfigManager configManager;
 

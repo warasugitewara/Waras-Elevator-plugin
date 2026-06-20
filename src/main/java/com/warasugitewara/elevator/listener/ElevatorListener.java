@@ -22,7 +22,10 @@ import java.util.UUID;
 
 public class ElevatorListener implements Listener {
 
-    private static final long COOLDOWN_MS = 300L;
+    // 下降はジャンプの滞空時間のような演出を挟まないぶん、上昇と同じ間隔だと
+    // テレポートの「間」が目立ちやすいため、下降だけクールダウンを短くする。
+    private static final long UP_COOLDOWN_MS = 300L;
+    private static final long DOWN_COOLDOWN_MS = 150L;
 
     private final ConfigManager configManager;
     private final Map<UUID, Long> cooldowns = new HashMap<>();
@@ -50,7 +53,7 @@ public class ElevatorListener implements Listener {
                 lastGroundY.put(id, currentY);
             }
 
-            if (!player.hasPermission("elevator.use") || isOnCooldown(player)) {
+            if (!player.hasPermission("elevator.use")) {
                 continue;
             }
 
@@ -68,6 +71,10 @@ public class ElevatorListener implements Listener {
                 direction = Direction.DOWN;
                 belowAnchor = player.getLocation();
             } else {
+                continue;
+            }
+
+            if (isOnCooldown(player, direction)) {
                 continue;
             }
 
@@ -127,9 +134,13 @@ public class ElevatorListener implements Listener {
         playSound(player, direction);
     }
 
-    private boolean isOnCooldown(Player player) {
+    private boolean isOnCooldown(Player player, Direction direction) {
         Long last = cooldowns.get(player.getUniqueId());
-        return last != null && System.currentTimeMillis() - last < COOLDOWN_MS;
+        if (last == null) {
+            return false;
+        }
+        long threshold = direction == Direction.UP ? UP_COOLDOWN_MS : DOWN_COOLDOWN_MS;
+        return System.currentTimeMillis() - last < threshold;
     }
 
     private void setCooldown(Player player) {

@@ -76,7 +76,7 @@ public class ElevatorListener implements Listener {
                 continue;
             }
 
-            triggerMove(player, direction);
+            triggerMove(player, direction, belowAnchor);
             // テレポート後に残ったジャンプの上昇速度で再度跳ね上がってしまうのを防ぐため、
             // 着地直後のY座標差分判定が誤って続けて発火しないよう速度と基準Yをリセットする。
             player.setVelocity(new Vector(0, 0, 0));
@@ -99,10 +99,12 @@ public class ElevatorListener implements Listener {
         return configManager.getBlocks().containsKey(material) ? material : null;
     }
 
-    private void triggerMove(Player player, Direction direction) {
+    private void triggerMove(Player player, Direction direction, Location floorAnchor) {
         World world = player.getWorld();
         Location loc = player.getLocation();
-        int currentY = loc.getBlockY() - 1;
+        // 上昇中は現在のY座標ではなく、下のブロック判定と同じ接地時のY座標を基準にしないと、
+        // ジャンプの頂点付近で「今いるブロック行」がずれて現在の床を取りこぼしてしまう。
+        int currentY = floorAnchor.getBlockY() - 1;
 
         ColumnAccessor column = new BukkitColumnAccessor(world, loc.getBlockX(), loc.getBlockZ());
         OptionalInt result = ElevatorService.findNextFloor(

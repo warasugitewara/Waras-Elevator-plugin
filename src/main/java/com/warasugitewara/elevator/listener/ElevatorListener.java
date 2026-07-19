@@ -29,9 +29,30 @@ public class ElevatorListener implements Listener {
     // これ未満のジャンプ(静止・微調整)のみを乗降操作として扱う。柱/床の上を走り抜けながらの
     // ジャンプは通常のジャンプと見なし、誤ってテレポートしないようにする。
     private static final double MAX_HORIZONTAL_JUMP_DRIFT = 0.15;
+    // テレポート直後はクライアントがテレポート確認を返すまで移動パケットが無効扱いになり、直後の
+    // ジャンプがPlayerJumpEventとして検出されないことがある。イベントだけに頼ると連打/長押しでの
+    // 連続上昇のテンポが落ちるため、上昇成功後この時間内は柱の中心付近に留まったまま再び上昇し
+    // 始めたらイベントを待たずに次の階へ連鎖させる。
+    private static final long ASCENT_CHAIN_WINDOW_MS = 600L;
+    // 連鎖を許可する柱中心からの水平ずれ。上昇時はブロック中心へテレポートしているため、その場の
+    // ジャンプ連打ならこの範囲に収まり、歩いて柱を離れれば連鎖は切れる。
+    private static final double ASCENT_CHAIN_MAX_OFFSET = 0.35;
+
+    private static final class AscentChain {
+        Location anchor;
+        long expiresAt;
+        double lastY;
+
+        AscentChain(Location anchor, long expiresAt) {
+            this.anchor = anchor;
+            this.expiresAt = expiresAt;
+            this.lastY = anchor.getY();
+        }
+    }
 
     private final ConfigManager configManager;
     private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private final Map<UUID, AscentChain> ascentChains = new HashMap<>();
 
     public ElevatorListener(ConfigManager configManager) {
         this.configManager = configManager;
@@ -59,12 +80,19 @@ public class ElevatorListener implements Listener {
         if (elevatorBlockBelow(player, from) == null) {
             return;
         }
-        if (triggerMove(player, Direction.UP, from)) {
-            // テレポート後に残った上昇速度で浮き上がらないよう垂直成分のみリセット。
-            // 水平速度は維持する(全ゼロ化すると移動中に急停止し拘束感が出る)。
-            Vector velocity = player.getVelocity();
-            player.setVelocity(velocity.setY(0));
+        Location destination = triggerMove(player, Direction.UP, from);
+        if (destination != null) {
+            finishAscent(player, destination);
         }
+    }
+
+    // 上昇テレポート成功後の共通処理。残った上昇速度で浮き上がらないよう垂直成分のみリセットし
+    // (水平速度は維持。全ゼロ化すると移動中に急停止し拘束感が出る)、連鎖ウィンドウを開始/更新する。
+    private void finishAscent(Player player, Location destination) {
+        Vector velocity = player.getVelocity();
+        player.setVelocity(velocity.setY(0));
+        ascentChains.put(player.getUniqueId(),
+                new AscentChain(destination, System.currentTimeMillis() + ASCENT_CHAIN_WINDOW_MS));
     }
 
     // 下降(スニーク)はその場でしゃがみ続けてもPlayerMoveEventが発火しないため、毎ティック全
@@ -74,6 +102,13 @@ public class ElevatorListener implements Listener {
             if (!player.hasPermission("elevator.use")) {
                 continue;
             }
+
+            UUID id = player.getUniqueId();
+            AscentChain chain = ascentChains.get(id);
+            if (chain != null && !continueAscentChain(player, chain)) {
+                ascentChains.remove(id);
+            }
+
             if (!player.isSneaking()) {
                 continue;
             }
@@ -88,10 +123,40 @@ public class ElevatorListener implements Listener {
         }
     }
 
+    // ウィンドウ内での上昇連鎖を試みる。falseを返したら連鎖終了(状態を破棄する)。
+    private boolean continueAscentChain(Player player, AscentChain chain) {
+        if (System.currentTimeMillis() > chain.expiresAt) {
+            return false;
+        }
+        Location loc = player.getLocation();
+        if (Math.abs(loc.getX() - chain.anchor.getX()) > ASCENT_CHAIN_MAX_OFFSET
+                || Math.abs(loc.getZ() - chain.anchor.getZ()) > ASCENT_CHAIN_MAX_OFFSET) {
+            return false;
+        }
+        double previousY = chain.lastY;
+        chain.lastY = loc.getY();
+        if (loc.getY() <= previousY) {
+            return true; // まだ次の上昇が始まっていない(着地待ち等)。ウィンドウ内なので継続監視
+        }
+        if (isOnCooldown(player, Direction.UP)) {
+            return true;
+        }
+        if (elevatorBlockBelow(player, chain.anchor) == null) {
+            return false;
+        }
+        Location destination = triggerMove(player, Direction.UP, chain.anchor);
+        if (destination == null) {
+            return false; // これ以上上の階はない
+        }
+        finishAscent(player, destination);
+        return true;
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         cooldowns.remove(id);
+        ascentChains.remove(id);
     }
 
     private Material elevatorBlockBelow(Player player, Location location) {
@@ -99,7 +164,8 @@ public class ElevatorListener implements Listener {
         return configManager.getBlocks().containsKey(material) ? material : null;
     }
 
-    private boolean triggerMove(Player player, Direction direction, Location floorAnchor) {
+    // テレポートに成功した場合は移動先のLocationを、移動先の階が見つからない場合はnullを返す。
+    private Location triggerMove(Player player, Direction direction, Location floorAnchor) {
         World world = player.getWorld();
         Location loc = player.getLocation();
         int currentY = floorAnchor.getBlockY() - 1;
@@ -119,7 +185,7 @@ public class ElevatorListener implements Listener {
                 direction
         );
         if (result.isEmpty()) {
-            return false;
+            return null;
         }
 
         int floorY = result.getAsInt();
@@ -128,7 +194,7 @@ public class ElevatorListener implements Listener {
         setCooldown(player);
         player.teleport(destination);
         playSound(player, direction);
-        return true;
+        return destination;
     }
 
     private boolean isOnCooldown(Player player, Direction direction) {

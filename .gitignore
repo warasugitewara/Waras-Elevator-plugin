@@ -7,3 +7,7 @@ build/
 .superpowers/
 *.iml
 out/
+bin/
+.classpath
+.project
+.settings/

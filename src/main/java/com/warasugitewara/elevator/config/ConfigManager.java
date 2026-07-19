@@ -43,7 +43,17 @@ public class ConfigManager {
                 if (material == null) {
                     continue;
                 }
-                int maxGap = Integer.parseInt(maxGapKey.toString());
+                int maxGap;
+                try {
+                    maxGap = Integer.parseInt(maxGapKey.toString());
+                } catch (NumberFormatException e) {
+                    plugin.getLogger().warning("max-gapが整数ではないためスキップします: " + maxGapKey);
+                    continue;
+                }
+                if (maxGap < 0) {
+                    plugin.getLogger().warning("max-gapが負の値のためスキップします: " + maxGapKey);
+                    continue;
+                }
                 blocks.put(material, maxGap);
             }
         }

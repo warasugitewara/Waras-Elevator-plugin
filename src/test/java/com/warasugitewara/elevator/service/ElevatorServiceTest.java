@@ -24,6 +24,7 @@ class ElevatorServiceTest {
 
 		private final Map<Integer, Material> materials = new HashMap<>();
 		private final Set<Integer> passable = new HashSet<>();
+		private final Set<Integer> liquid = new HashSet<>();
 
 		FakeColumn fill(int minY, int maxY, Material material) {
 			for (int y = minY; y <= maxY; y++) {
@@ -39,6 +40,13 @@ class ElevatorServiceTest {
 			return this;
 		}
 
+		FakeColumn setLiquid(int minY, int maxY) {
+			for (int y = minY; y <= maxY; y++) {
+				liquid.add(y);
+			}
+			return this;
+		}
+
 		@Override
 		public Material materialAt(int y) {
 			return materials.getOrDefault(y, Material.AIR);
@@ -47,6 +55,11 @@ class ElevatorServiceTest {
 		@Override
 		public boolean isPassableAt(int y) {
 			return passable.contains(y);
+		}
+
+		@Override
+		public boolean isLiquidAt(int y) {
+			return liquid.contains(y);
 		}
 	}
 
@@ -160,6 +173,56 @@ class ElevatorServiceTest {
 			.fill(60, 62, Material.IRON_BLOCK)
 			.fill(70, 70, Material.IRON_BLOCK)
 			.setPassable(62, 64)
+			.setPassable(71, 72);
+
+		OptionalInt result = ElevatorService.findNextFloor(BLOCK_CONFIG, column, 60, 0, 255, Direction.UP);
+
+		assertTrue(result.isPresent());
+		assertEquals(70, result.getAsInt());
+	}
+
+	@Test
+	void skipsLiquidLandingAndFindsFurtherSafeFloor() {
+		// y=60に鉄ブロック。y=65に次の鉄ブロックがあるが、その足元(66)が液体(水/溶岩)。
+		// 液体はisPassable()=trueだが着地不可なのでスキップし、さらに上のy=70(71,72が安全)を返す。
+		FakeColumn column = new FakeColumn()
+			.fill(60, 60, Material.IRON_BLOCK)
+			.fill(65, 65, Material.IRON_BLOCK)
+			.setPassable(66, 67)
+			.setLiquid(66, 66)
+			.fill(70, 70, Material.IRON_BLOCK)
+			.setPassable(71, 72);
+
+		OptionalInt result = ElevatorService.findNextFloor(BLOCK_CONFIG, column, 60, 0, 255, Direction.UP);
+
+		assertTrue(result.isPresent());
+		assertEquals(70, result.getAsInt());
+	}
+
+	@Test
+	void returnsEmptyWhenOnlyFloorHasLiquidLanding() {
+		// 唯一の着地候補y=70の頭上(72)が液体。他に安全な階がないためemptyを返す。
+		FakeColumn column = new FakeColumn()
+			.fill(60, 60, Material.IRON_BLOCK)
+			.fill(70, 70, Material.IRON_BLOCK)
+			.setPassable(71, 72)
+			.setLiquid(72, 72);
+
+		OptionalInt result = ElevatorService.findNextFloor(BLOCK_CONFIG, column, 60, 0, 255, Direction.UP);
+
+		assertTrue(result.isEmpty());
+	}
+
+	@Test
+	void skipsContiguousRunOfMixedMaterialsBeforeSearching() {
+		// y=60鉄ブロック、y=61ダイヤブロック(いずれも登録済み)が連続。連続部分は1つの床の厚みとして
+		// 一括スキップされるべき。スキップが同種のみだと cursor=61 でダイヤに着地判定が通り(62,63が安全)
+		// 61が誤って返る。異種も含めてスキップすれば61は候補にならず、70が返るべき。
+		FakeColumn column = new FakeColumn()
+			.fill(60, 60, Material.IRON_BLOCK)
+			.fill(61, 61, Material.DIAMOND_BLOCK)
+			.fill(70, 70, Material.IRON_BLOCK)
+			.setPassable(62, 63)
 			.setPassable(71, 72);
 
 		OptionalInt result = ElevatorService.findNextFloor(BLOCK_CONFIG, column, 60, 0, 255, Direction.UP);

@@ -65,6 +65,10 @@ public class ElevatorCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage("§cmax-gapは整数で指定してください: " + args[3]);
                     return;
                 }
+                if (maxGap < 0) {
+                    sender.sendMessage("§cmax-gapは0以上で指定してください。");
+                    return;
+                }
                 configManager.addOrUpdateBlock(material, maxGap);
                 sender.sendMessage("§a" + material.getKey() + " をmax-gap=" + maxGap + "で登録しました。");
             }
@@ -98,14 +102,15 @@ public class ElevatorCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§c使い方: /elevator sound <on|off>");
             return;
         }
-        boolean enabled = switch (args[1].toLowerCase()) {
-            case "on" -> true;
-            case "off" -> false;
+        boolean enabled;
+        switch (args[1].toLowerCase()) {
+            case "on" -> enabled = true;
+            case "off" -> enabled = false;
             default -> {
                 sender.sendMessage("§con/offで指定してください。");
-                yield configManager.isSoundEnabled();
+                return;
             }
-        };
+        }
         configManager.setSoundEnabled(enabled);
         sender.sendMessage("§aサウンドを" + (enabled ? "有効" : "無効") + "にしました。");
     }

@@ -10,4 +10,6 @@ public interface ColumnAccessor {
     Material materialAt(int y);
 
     boolean isPassableAt(int y);
+
+    boolean isLiquidAt(int y);
 }

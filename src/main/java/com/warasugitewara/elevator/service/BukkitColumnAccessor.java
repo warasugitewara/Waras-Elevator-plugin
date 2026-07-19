@@ -24,4 +24,9 @@ public class BukkitColumnAccessor implements ColumnAccessor {
     public boolean isPassableAt(int y) {
         return world.getBlockAt(x, y, z).isPassable();
     }
+
+    @Override
+    public boolean isLiquidAt(int y) {
+        return world.getBlockAt(x, y, z).isLiquid();
+    }
 }

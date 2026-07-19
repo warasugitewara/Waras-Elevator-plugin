@@ -26,8 +26,10 @@ public final class ElevatorService {
 
 		int step = direction == Direction.UP ? 1 : -1;
 
+		// 足元から連続する登録ブロックは(同種・異種を問わず)1つの床の厚みとして一括でスキップする。
+		// maxGapは足元のブロック(base)の設定値を使う。
 		int y = currentY;
-		while (inBounds(y + step, minY, maxY) && column.materialAt(y + step) == base) {
+		while (inBounds(y + step, minY, maxY) && blockConfig.containsKey(column.materialAt(y + step))) {
 			y += step;
 		}
 
@@ -55,6 +57,9 @@ public final class ElevatorService {
 		int feetY = floorY + 1;
 		int headY = floorY + 2;
 		if (!inBounds(headY, minY, maxY))
+			return false;
+		// isPassable()は水・溶岩でもtrueを返すため、液体への着地を別途拒否する。
+		if (column.isLiquidAt(feetY) || column.isLiquidAt(headY))
 			return false;
 		return column.isPassableAt(feetY) && column.isPassableAt(headY);
 	}

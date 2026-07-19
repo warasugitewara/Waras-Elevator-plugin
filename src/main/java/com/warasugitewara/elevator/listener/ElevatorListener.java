@@ -1,5 +1,6 @@
 package com.warasugitewara.elevator.listener;
 
+import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 import com.warasugitewara.elevator.config.ConfigManager;
 import com.warasugitewara.elevator.service.BukkitColumnAccessor;
 import com.warasugitewara.elevator.service.ColumnAccessor;
@@ -24,77 +25,66 @@ public class ElevatorListener implements Listener {
 
     private static final long UP_COOLDOWN_MS = 150L;
     private static final long DOWN_COOLDOWN_MS = 150L;
+    // 1ティックの水平移動量のしきい値。歩き≒0.22, スプリント≒0.28, 静止≒0 なので、
+    // これ未満のジャンプ(静止・微調整)のみを乗降操作として扱う。柱/床の上を走り抜けながらの
+    // ジャンプは通常のジャンプと見なし、誤ってテレポートしないようにする。
+    private static final double MAX_HORIZONTAL_JUMP_DRIFT = 0.15;
 
     private final ConfigManager configManager;
     private final Map<UUID, Long> cooldowns = new HashMap<>();
-    // Player#getVelocity()はノックバック等の明示的な速度には追従するが、ジャンプ自体の
-    // 上昇では信頼できる値を返さないことがあるため、毎ティックのY座標差分で上昇を判定する。
-    private final Map<UUID, Double> lastY = new HashMap<>();
-    // 上昇中は現在位置の1つ下を見ると、ジャンプの頂点付近でエレベーターブロックから外れた
-    // (空気の)位置を見てしまい判定を取りこぼす。直前に接地していたY座標を基準にする。
-    private final Map<UUID, Double> lastGroundY = new HashMap<>();
 
     public ElevatorListener(ConfigManager configManager) {
         this.configManager = configManager;
     }
 
-    // PlayerMoveEventは実際に座標/向きが変化した時しか発火せず、立ち止まったままシフトを
-    // 押し続けているだけでは判定が走らない。移動イベントに依存せず、毎ティック全プレイヤーの
-    // Y座標差分/しゃがみ状態を見ることで、その場待機中でも継続した上昇/下降ができるようにする。
+    // 上昇は実際のジャンプでのみ発火するPlayerJumpEventで判定する。毎ティックのY差分監視と違い、
+    // ジャンプの継続中に介入し続けないため、最上階でも通常どおりジャンプでき、床を走り抜ける際の
+    // 誤発動も避けられる。
+    @EventHandler
+    public void onJump(PlayerJumpEvent event) {
+        Player player = event.getPlayer();
+        if (!player.hasPermission("elevator.use")) {
+            return;
+        }
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        double dx = to.getX() - from.getX();
+        double dz = to.getZ() - from.getZ();
+        if (dx * dx + dz * dz >= MAX_HORIZONTAL_JUMP_DRIFT * MAX_HORIZONTAL_JUMP_DRIFT) {
+            return; // 移動しながらのジャンプは通常のジャンプとして扱い、乗降と見なさない
+        }
+        if (isOnCooldown(player, Direction.UP)) {
+            return;
+        }
+        if (elevatorBlockBelow(player, from) == null) {
+            return;
+        }
+        if (triggerMove(player, Direction.UP, from)) {
+            // テレポート後に残った上昇速度で浮き上がらないよう垂直成分のみリセット。
+            // 水平速度は維持する(全ゼロ化すると移動中に急停止し拘束感が出る)。
+            Vector velocity = player.getVelocity();
+            player.setVelocity(velocity.setY(0));
+        }
+    }
+
+    // 下降(スニーク)はその場でしゃがみ続けてもPlayerMoveEventが発火しないため、毎ティック全
+    // プレイヤーのしゃがみ状態をポーリングする。これにより待機中でも継続した下降ができる。
     public void tick() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            UUID id = player.getUniqueId();
-            double currentY = player.getLocation().getY();
-            Double previousY = lastY.put(id, currentY);
-
-            if (player.isOnGround()) {
-                lastGroundY.put(id, currentY);
-            }
-
             if (!player.hasPermission("elevator.use")) {
                 continue;
             }
-
-            Direction direction;
-            Location belowAnchor;
-            if (previousY != null && currentY > previousY) {
-                Double groundY = lastGroundY.get(id);
-                if (groundY == null) {
-                    continue;
-                }
-                direction = Direction.UP;
-                belowAnchor = player.getLocation().clone();
-                belowAnchor.setY(groundY);
-            } else if (player.isSneaking()) {
-                direction = Direction.DOWN;
-                belowAnchor = player.getLocation();
-            } else {
+            if (!player.isSneaking()) {
                 continue;
             }
-
-            if (isOnCooldown(player, direction)) {
+            if (isOnCooldown(player, Direction.DOWN)) {
                 continue;
             }
-
-            Material below = elevatorBlockBelow(player, belowAnchor);
-            if (below == null) {
+            Location loc = player.getLocation();
+            if (elevatorBlockBelow(player, loc) == null) {
                 continue;
             }
-
-            boolean moved = triggerMove(player, direction, belowAnchor);
-            if (!moved) {
-                // 移動先の階が見つからなかった場合(最上階/最下階など)は通常のジャンプ/
-                // しゃがみとして扱うため、速度をリセットしてはいけない。リセットすると
-                // 毎ティック上昇速度が潰されてジャンプ自体ができなくなってしまう。
-                continue;
-            }
-
-            // テレポート後に残ったジャンプの上昇速度で再度跳ね上がってしまうのを防ぐため、
-            // 着地直後のY座標差分判定が誤って続けて発火しないよう速度と基準Yをリセットする。
-            player.setVelocity(new Vector(0, 0, 0));
-            double landedY = player.getLocation().getY();
-            lastY.put(id, landedY);
-            lastGroundY.put(id, landedY);
+            triggerMove(player, Direction.DOWN, loc);
         }
     }
 
@@ -102,8 +92,6 @@ public class ElevatorListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         cooldowns.remove(id);
-        lastY.remove(id);
-        lastGroundY.remove(id);
     }
 
     private Material elevatorBlockBelow(Player player, Location location) {
@@ -114,11 +102,14 @@ public class ElevatorListener implements Listener {
     private boolean triggerMove(Player player, Direction direction, Location floorAnchor) {
         World world = player.getWorld();
         Location loc = player.getLocation();
-        // 上昇中は現在のY座標ではなく、下のブロック判定と同じ接地時のY座標を基準にしないと、
-        // ジャンプの頂点付近で「今いるブロック行」がずれて現在の床を取りこぼしてしまう。
         int currentY = floorAnchor.getBlockY() - 1;
 
-        ColumnAccessor column = new BukkitColumnAccessor(world, loc.getBlockX(), loc.getBlockZ());
+        // 探索する柱とテレポート先のX/Zをアンカーのブロック座標に統一する。ブロック中心(+0.5)へ
+        // 送ることで、幅0.6のプレイヤー当たり判定が必ず安全チェック済みの1柱内(0.2〜0.8)に収まり、
+        // 隣接する壁へのめり込み(窒息)が構造的に起きなくなる。
+        int bx = floorAnchor.getBlockX();
+        int bz = floorAnchor.getBlockZ();
+        ColumnAccessor column = new BukkitColumnAccessor(world, bx, bz);
         OptionalInt result = ElevatorService.findNextFloor(
                 configManager.getBlocks(),
                 column,
@@ -132,7 +123,7 @@ public class ElevatorListener implements Listener {
         }
 
         int floorY = result.getAsInt();
-        Location destination = new Location(world, loc.getX(), floorY + 1, loc.getZ(), loc.getYaw(), loc.getPitch());
+        Location destination = new Location(world, bx + 0.5, floorY + 1, bz + 0.5, loc.getYaw(), loc.getPitch());
 
         setCooldown(player);
         player.teleport(destination);

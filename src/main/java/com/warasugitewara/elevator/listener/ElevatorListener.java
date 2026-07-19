@@ -24,7 +24,9 @@ import java.util.UUID;
 public class ElevatorListener implements Listener {
 
     private static final long UP_COOLDOWN_MS = 150L;
-    private static final long DOWN_COOLDOWN_MS = 150L;
+    // 下降はジャンプと違い着地を挟まずシフト押しっぱなしでクールダウン間隔ごとに降り続けるため、
+    // 上昇と同じ150msだと体感が速すぎる。少し長めにしてテンポを揃える。
+    private static final long DOWN_COOLDOWN_MS = 300L;
     // 1ティックの水平移動量のしきい値。歩き≒0.22, スプリント≒0.28, 静止≒0 なので、
     // これ未満のジャンプ(静止・微調整)のみを乗降操作として扱う。柱/床の上を走り抜けながらの
     // ジャンプは通常のジャンプと見なし、誤ってテレポートしないようにする。

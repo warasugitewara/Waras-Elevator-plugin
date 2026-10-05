@@ -1,7 +1,7 @@
 name: WarasElevators
 version: '${version}'
 main: com.warasugitewara.elevator.ElevatorPlugin
-api-version: '1.21'
+api-version: '26.2'
 author: warasugitewara
 description: "Wara's Elevators: Walk onto stacked blocks and jump/sneak to ride elevators."
 commands:

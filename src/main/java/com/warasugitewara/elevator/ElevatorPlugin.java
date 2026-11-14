@@ -8,8 +8,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class ElevatorPlugin extends JavaPlugin {
 
-	private static final long TICK_INTERVAL_TICKS = 1L;
-
 	private ConfigManager configManager;
 
 	@Override
@@ -17,9 +15,7 @@ public class ElevatorPlugin extends JavaPlugin {
 		configManager = new ConfigManager(this);
 		configManager.load();
 
-		ElevatorListener listener = new ElevatorListener(configManager);
-		getServer().getPluginManager().registerEvents(listener, this);
-		getServer().getScheduler().scheduleSyncRepeatingTask(this, listener::tick, 0L, TICK_INTERVAL_TICKS);
+		getServer().getPluginManager().registerEvents(new ElevatorListener(this, configManager), this);
 
 		ElevatorCommand command = new ElevatorCommand(configManager);
 		PluginCommand pluginCommand = getCommand("elevator");

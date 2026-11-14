@@ -11,3 +11,6 @@ bin/
 .classpath
 .project
 .settings/
+
+# ローカル検証サーバー (Paper / Canvas)
+run/

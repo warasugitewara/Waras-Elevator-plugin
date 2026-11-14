@@ -13,21 +13,23 @@ import java.util.Map;
 public class ConfigManager {
 
     private final JavaPlugin plugin;
-    private final Map<Material, Integer> blocks = new LinkedHashMap<>();
-    private boolean soundEnabled;
-    private String ascendSound;
-    private String descendSound;
+    // Foliaではリスナー(各プレイヤーのリージョンスレッド)とコマンドが別スレッドで動くため、
+    // 不変スナップショットを差し替える方式(copy-on-write)にして読み取り側をロック不要にする。
+    private volatile Map<Material, Integer> blocks = Map.of();
+    private volatile boolean soundEnabled;
+    private volatile String ascendSound;
+    private volatile String descendSound;
 
     public ConfigManager(JavaPlugin plugin) {
         this.plugin = plugin;
     }
 
-    public void load() {
+    public synchronized void load() {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
         FileConfiguration config = plugin.getConfig();
 
-        blocks.clear();
+        Map<Material, Integer> loaded = new LinkedHashMap<>();
         List<?> rawBlocks = config.getList("blocks");
         if (rawBlocks != null) {
             for (Object entry : rawBlocks) {
@@ -54,9 +56,10 @@ public class ConfigManager {
                     plugin.getLogger().warning("max-gapが負の値のためスキップします: " + maxGapKey);
                     continue;
                 }
-                blocks.put(material, maxGap);
+                loaded.put(material, maxGap);
             }
         }
+        blocks = Collections.unmodifiableMap(loaded);
 
         soundEnabled = config.getBoolean("sound.enabled", true);
         ascendSound = config.getString("sound.ascend", "minecraft:block.beacon.activate");
@@ -64,17 +67,21 @@ public class ConfigManager {
     }
 
     public Map<Material, Integer> getBlocks() {
-        return Collections.unmodifiableMap(blocks);
+        return blocks;
     }
 
-    public void addOrUpdateBlock(Material material, int maxGap) {
-        blocks.put(material, maxGap);
+    public synchronized void addOrUpdateBlock(Material material, int maxGap) {
+        Map<Material, Integer> updated = new LinkedHashMap<>(blocks);
+        updated.put(material, maxGap);
+        blocks = Collections.unmodifiableMap(updated);
         save();
     }
 
-    public boolean removeBlock(Material material) {
-        boolean removed = blocks.remove(material) != null;
+    public synchronized boolean removeBlock(Material material) {
+        Map<Material, Integer> updated = new LinkedHashMap<>(blocks);
+        boolean removed = updated.remove(material) != null;
         if (removed) {
+            blocks = Collections.unmodifiableMap(updated);
             save();
         }
         return removed;
@@ -84,7 +91,7 @@ public class ConfigManager {
         return soundEnabled;
     }
 
-    public void setSoundEnabled(boolean enabled) {
+    public synchronized void setSoundEnabled(boolean enabled) {
         this.soundEnabled = enabled;
         save();
     }
@@ -97,7 +104,7 @@ public class ConfigManager {
         return descendSound;
     }
 
-    public void save() {
+    public synchronized void save() {
         FileConfiguration config = plugin.getConfig();
 
         List<Map<String, Object>> serialized = new ArrayList<>();

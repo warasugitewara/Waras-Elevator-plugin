@@ -151,4 +151,7 @@ sound:
 2. `.github/release-notes/v<version>.md` にリリースノートを書く。
 3. master にマージ(push)する。
 
-GitHub Actions(`.github/workflows/build.yml`)が両方の jar をビルドし、`v<version>` のリリースがまだ無ければタグとリリースを作成して jar を添付します。
+GitHub Actions(`.github/workflows/build.yml`)が両方の jar をビルドし、`v<version>` のリリースを更新します。
+
+- リリースが無い場合: タグとリリースを作成し、両方の jar を添付します(本文はリリースノート)。
+- リリースが既にある場合: まだ添付されていない jar だけを追加し、リリースノートを本文の末尾に追記します。既存の jar は置き換えません。

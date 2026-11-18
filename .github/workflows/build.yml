@@ -1,8 +1,9 @@
 name: Build
 
 # PR・master への push でPaper版/NeoForge版をビルドしテストする。
-# master への push 時、バージョン(v<version>)のリリースがまだ無ければ
-# 両方の jar を添付した GitHub Release を自動で作成する。
+# master への push 時は v<version> の GitHub Release を自動で更新する。
+#   - リリースが無ければ、両方の jar を添付して新規作成する
+#   - 既にあれば、まだ添付されていない jar だけを追加し、リリースノートを本文末尾に追記する
 on:
   push:
     branches: [master]
@@ -16,7 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Release の作成に必要
+      contents: write # Release の作成・更新に必要
     steps:
       - uses: actions/checkout@v7
 
@@ -49,34 +50,45 @@ jobs:
         # setup-java で入れた JDK 21 をツールチェーンとして使わせる
         run: ./gradlew -p neoforge build -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64
 
-      - name: Check whether release is needed
-        id: release
+      - name: Publish release
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: v${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
-            echo "${TAG} は既にリリース済みのためスキップします"
-            echo "needed=false" >> "$GITHUB_OUTPUT"
+          tag="v${VERSION}"
+          notes=".github/release-notes/${tag}.md"
+          files=(
+            "build/libs/WarasElevators-${VERSION}.jar"
+            "neoforge/build/libs/WarasElevators-NeoForge-1.21.1-${VERSION}.jar"
+          )
+          for f in "${files[@]}"; do
+            [ -f "${f}" ] || { echo "::error::${f} がビルドされていません"; exit 1; }
+          done
+
+          if ! gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            # リリースが無ければ新規作成
+            [ -f "${notes}" ] || { echo "::error::${notes} がありません。リリースノートを追加してください"; exit 1; }
+            gh release create "${tag}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" \
+              --target "${GITHUB_SHA}" --title "Wara's Elevators ${tag}" --notes-file "${notes}"
             exit 0
           fi
-          notes=".github/release-notes/${TAG}.md"
-          if [ ! -f "${notes}" ]; then
-            echo "::error::${notes} がありません。リリースノートを追加してください"
-            exit 1
-          fi
-          echo "needed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Create release
-        if: steps.release.outputs.needed == 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          name: Wara's Elevators v${{ steps.version.outputs.version }}
-          body_path: .github/release-notes/v${{ steps.version.outputs.version }}.md
-          fail_on_unmatched_files: true
-          files: |
-            build/libs/WarasElevators-${{ steps.version.outputs.version }}.jar
-            neoforge/build/libs/WarasElevators-NeoForge-1.21.1-${{ steps.version.outputs.version }}.jar
+          # 既存リリースには、まだ添付されていない jar だけを追加する(既存の jar は置き換えない)
+          existing=$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name')
+          missing=()
+          for f in "${files[@]}"; do
+            grep -qxF "$(basename "${f}")" <<< "${existing}" || missing+=("${f}")
+          done
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "${tag} には全ての jar が添付済みのためスキップします"
+            exit 0
+          fi
+          gh release upload "${tag}" "${missing[@]}" --repo "${GITHUB_REPOSITORY}"
+
+          # jar を追加したときだけ、リリースノートがあれば既存の本文の末尾に追記する
+          if [ -f "${notes}" ]; then
+            body=$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq '.body')
+            printf '%s\n\n%s\n' "${body}" "$(cat "${notes}")" > "${RUNNER_TEMP}/notes.md"
+            gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --notes-file "${RUNNER_TEMP}/notes.md"
+          fi

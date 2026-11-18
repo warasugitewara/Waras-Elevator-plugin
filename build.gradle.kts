@@ -6,7 +6,13 @@ group = "com.warasugitewara"
 version = "1.1.0"
 
 repositories {
-    mavenCentral()
+    mavenCentral {
+        // Paper API は PaperMC リポジトリにしか無い。Maven Central に問い合わせると
+        // 通常は404で次のリポジトリへ進むが、429(レート制限)等が返るとビルドが失敗するため除外する。
+        content {
+            excludeGroupByRegex("io\\.papermc(\\..*)?")
+        }
+    }
     maven("https://repo.papermc.io/repository/maven-public/")
 }
 

@@ -38,7 +38,7 @@
 
 ### NeoForge 1.21.1
 
-1. `WarasElevators-NeoForge-1.21.1-<version>.jar` を `mods/` フォルダに配置。
+1. `WarasElevators-<version>-neoforge-1.21.1.jar` を `mods/` フォルダに配置。
    - **マルチプレイ**: サーバーへの導入は必須です。クライアントへの導入は任意ですが推奨です(下記参照)。
    - **シングルプレイ**: クライアントの `mods/` に入れるだけで動作します。
 2. ゲーム/サーバーを起動。
@@ -142,7 +142,7 @@ sound:
 ./gradlew -p neoforge build
 ```
 
-`neoforge/build/libs/WarasElevators-NeoForge-1.21.1-<version>.jar` が出力されます。
+`neoforge/build/libs/WarasElevators-<version>-neoforge-1.21.1.jar` が出力されます。
 開発用のクライアント/サーバーは `./gradlew -p neoforge runClient` / `./gradlew -p neoforge runServer` で起動できます。
 
 ## リリース手順

@@ -3,11 +3,13 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.148'
 }
 
-version = mod_version
+// jar名: WarasElevators-<version>-neoforge-<minecraft_version>.jar (Paper版の WarasElevators-<version>.jar と並ぶ)
+// Mod自体のバージョン(neoforge.mods.toml)は mod_version のまま
+version = "${mod_version}-neoforge-${minecraft_version}"
 group = mod_group_id
 
 base {
-    archivesName = "WarasElevators-NeoForge-${minecraft_version}"
+    archivesName = 'WarasElevators'
 }
 
 // Minecraft 1.21.1 は Java 21 で動作する

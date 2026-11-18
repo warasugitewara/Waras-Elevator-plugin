@@ -144,3 +144,11 @@ sound:
 
 `neoforge/build/libs/WarasElevators-NeoForge-1.21.1-<version>.jar` が出力されます。
 開発用のクライアント/サーバーは `./gradlew -p neoforge runClient` / `./gradlew -p neoforge runServer` で起動できます。
+
+## リリース手順
+
+1. `build.gradle.kts` の `version` と `neoforge/gradle.properties` の `mod_version` を同じ値に更新する。
+2. `.github/release-notes/v<version>.md` にリリースノートを書く。
+3. master にマージ(push)する。
+
+GitHub Actions(`.github/workflows/build.yml`)が両方の jar をビルドし、`v<version>` のリリースがまだ無ければタグとリリースを作成して jar を添付します。
